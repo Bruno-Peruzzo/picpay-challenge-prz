@@ -1,0 +1,168 @@
+# values.yaml — configuração padrão do chart picpay-app.
+# Comentários explicam o "porquê" de cada escolha, não só o "o quê".
+
+# -----------------------------------------------------------------------------
+# Imagem
+# -----------------------------------------------------------------------------
+# O repositório é o ECR do projeto (conta 390736326016, us-east-2). A tag é
+# IMUTÁVEL no ECR e, no fluxo GitOps, recebe o SHA do commit — o CI faz o "bump"
+# desta tag e o ArgoCD sincroniza. Mantemos "latest" só como placeholder local;
+# em produção/GitOps a tag é sempre fixada.
+image:
+  repository: 390736326016.dkr.ecr.us-east-2.amazonaws.com/picpay-challenge-app
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# -----------------------------------------------------------------------------
+# Service Account
+# -----------------------------------------------------------------------------
+# A app NÃO precisa de permissões AWS (quem fala com a AWS são os controllers,
+# via Pod Identity). Criamos uma SA dedicada sem anotações IAM — superfície
+# mínima e sem herdar a SA default do namespace.
+serviceAccount:
+  create: true
+  name: ""        # vazio => usa o nome do release (ver _helpers.tpl)
+  annotations: {}
+
+# -----------------------------------------------------------------------------
+# Alta disponibilidade
+# -----------------------------------------------------------------------------
+# replicaCount só é usado quando o HPA está desabilitado; com HPA ligado, o HPA
+# gerencia o número de réplicas (ver autoscaling abaixo).
+replicaCount: 2
+
+# PodDisruptionBudget: garante que ao menos N pods fiquem de pé durante
+# disrupções voluntárias (drain de nó, upgrade). minAvailable: 1 é seguro com
+# 2+ réplicas e evita indisponibilidade total num drain.
+pdb:
+  enabled: true
+  minAvailable: 1
+
+# HPA: escala por utilização de CPU. Começa em 2 réplicas (floor de HA) e
+# cresce até 5. Target 70% de CPU é um ponto de partida conservador.
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  # targetMemoryUtilizationPercentage: 80   # opcional
+
+# Espalha as réplicas por nós e por AZ (zonas), para sobreviver à perda de um
+# nó ou de uma AZ inteira. Importante com node group SPOT, onde nós somem.
+topologySpread:
+  enabled: true
+  # ScheduleAnyway (não DoNotSchedule) para não travar o scheduling se a
+  # topologia não for perfeitamente satisfeita — resiliência sem rigidez.
+  maxSkew: 1
+  whenUnsatisfiable: ScheduleAnyway
+
+# Anti-affinity: prefere colocar réplicas em nós diferentes (preferred, não
+# required, para não impedir o scheduling em cluster pequeno).
+podAntiAffinity:
+  enabled: true
+
+# -----------------------------------------------------------------------------
+# Recursos (requests/limits)
+# -----------------------------------------------------------------------------
+# Valores pequenos: a app é leve e os nós são Free Tier (2 vCPU / 4-8 GB).
+# requests garantem agendamento; limits evitam que um pod degrade o nó.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 128Mi
+
+# -----------------------------------------------------------------------------
+# Probes (batem nos endpoints reais da app)
+# -----------------------------------------------------------------------------
+# liveness em /health (processo vivo); readiness em /ready (pronto p/ tráfego;
+# vira 503 no shutdown gracioso, drenando o tráfego antes de encerrar).
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  readiness:
+    path: /ready
+    initialDelaySeconds: 3
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 3
+
+# -----------------------------------------------------------------------------
+# Porta / Service
+# -----------------------------------------------------------------------------
+# A app escuta na 8080 (variável PORT). O Service expõe a 80 -> 8080.
+containerPort: 8080
+service:
+  type: ClusterIP
+  port: 80
+
+# -----------------------------------------------------------------------------
+# Ingress (ALB via AWS Load Balancer Controller)
+# -----------------------------------------------------------------------------
+# Desabilitado por padrão: só habilitamos quando o controller estiver instalado
+# (Fase 3) e o domínio existir (Fase 7). As annotations criam um ALB público
+# (internet-facing) com target-type ip (roteia direto para as pods).
+# O HTTPS/ACM entra na Fase 7 (certificate-arn + redirect 80->443).
+ingress:
+  enabled: false
+  className: alb
+  host: ""        # ex.: app.seu-dominio.com (Fase 7)
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    # Fase 7 (HTTPS):
+    # alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    # alb.ingress.kubernetes.io/ssl-redirect: '443'
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-2:390736326016:certificate/xxxx
+
+# -----------------------------------------------------------------------------
+# ServiceMonitor (kube-prometheus-stack)
+# -----------------------------------------------------------------------------
+# Desabilitado por padrão: depende do CRD ServiceMonitor (instalado pelo
+# kube-prometheus-stack na Fase 4). Quando ligado, o Prometheus faz scrape do
+# /metrics da app e a métrica custom picpay_greetings_total aparece no Grafana.
+serviceMonitor:
+  enabled: false
+  path: /metrics
+  interval: 30s
+  scrapeTimeout: 10s
+  # labels que casam com o selector do Prometheus do kube-prometheus-stack.
+  # O default do stack costuma ser release=<nome-do-release-do-stack>.
+  additionalLabels: {}
+
+# -----------------------------------------------------------------------------
+# Segurança (securityContext restrito)
+# -----------------------------------------------------------------------------
+# A imagem distroless já roda como nonroot (uid 65532). Reforçamos no manifesto:
+# sem privilégios, sem escalonamento, root FS somente-leitura, todas as caps
+# dropadas. seccomp RuntimeDefault.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  privileged: false
+  capabilities:
+    drop:
+      - ALL
+
+# Anotações/labels extras e nodeSelector/tolerations opcionais.
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []

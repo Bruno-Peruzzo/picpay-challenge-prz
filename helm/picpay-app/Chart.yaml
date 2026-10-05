@@ -1,0 +1,22 @@
+apiVersion: v2
+name: picpay-app
+description: App Go de demonstração do desafio PicPay EKS (endpoints HTTP + métricas Prometheus), empacotada com alta disponibilidade.
+type: application
+
+# version: versão do chart (SemVer). Suba a cada mudança no chart.
+version: 0.1.0
+
+# appVersion: versão da aplicação empacotada. Informativo; a imagem real é
+# controlada por image.tag no values (tag = SHA do commit, via GitOps).
+appVersion: "0.1.0"
+
+keywords:
+  - go
+  - prometheus
+  - eks
+  - picpay
+home: https://github.com/Bruno-Peruzzo/picpay-app-prz
+sources:
+  - https://github.com/Bruno-Peruzzo/picpay-app-prz
+maintainers:
+  - name: Bruno-Peruzzo

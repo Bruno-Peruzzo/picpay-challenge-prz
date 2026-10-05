@@ -1,0 +1,10 @@
+# Padrões de arquivos que não entram no pacote do chart.
+.DS_Store
+.git/
+.gitignore
+*.tmproj
+*.bak
+*.swp
+*.orig
+.idea/
+.vscode/

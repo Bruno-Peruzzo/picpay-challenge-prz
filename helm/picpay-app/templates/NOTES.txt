@@ -1,0 +1,35 @@
+picpay-app instalado como release "{{ .Release.Name }}" no namespace "{{ .Release.Namespace }}".
+
+Réplicas (HA):
+{{- if .Values.autoscaling.enabled }}
+  HPA ativo: {{ .Values.autoscaling.minReplicas }}–{{ .Values.autoscaling.maxReplicas }} réplicas (CPU alvo {{ .Values.autoscaling.targetCPUUtilizationPercentage }}%).
+{{- else }}
+  Réplicas fixas: {{ .Values.replicaCount }}.
+{{- end }}
+
+Testar localmente (sem Ingress):
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "picpay-app.fullname" . }} 8080:{{ .Values.service.port }}
+  curl localhost:8080/            # saudação (incrementa picpay_greetings_total)
+  curl localhost:8080/health      # liveness
+  curl localhost:8080/ready       # readiness
+  curl localhost:8080/metrics     # métricas Prometheus
+
+{{- if .Values.ingress.enabled }}
+
+Ingress (ALB) habilitado{{ if .Values.ingress.host }} em: http://{{ .Values.ingress.host }}/{{ end }}.
+O endereço do ALB aparece quando o AWS Load Balancer Controller provisiona:
+  kubectl -n {{ .Release.Namespace }} get ingress {{ include "picpay-app.fullname" . }}
+{{- else }}
+
+Ingress desabilitado (ingress.enabled=false). Habilite quando o AWS Load Balancer
+Controller estiver instalado (Fase 3) e o domínio existir (Fase 7).
+{{- end }}
+
+{{- if .Values.serviceMonitor.enabled }}
+
+ServiceMonitor habilitado: o Prometheus deve coletar {{ .Values.serviceMonitor.path }} a cada {{ .Values.serviceMonitor.interval }}.
+Confira a métrica custom no Grafana/Prometheus: picpay_greetings_total
+{{- else }}
+
+ServiceMonitor desabilitado. Habilite após instalar o kube-prometheus-stack (Fase 4).
+{{- end }}
