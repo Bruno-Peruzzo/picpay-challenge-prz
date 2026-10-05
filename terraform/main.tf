@@ -49,5 +49,40 @@ module "pod_identity" {
 
   cluster_name = module.eks.cluster_name
 
+  # Least privilege: o ExternalDNS só pode alterar registros da nossa hosted
+  # zone (ARN vindo do módulo dns), em vez do default "*".
+  external_dns_hosted_zone_arns = [module.dns.zone_arn]
+
   depends_on = [module.eks]
+}
+
+# (4b) DNS + TLS (Fase 7). Lê a hosted zone criada à mão (Opção 1, fora do
+# ciclo de destroy) e gerencia só o certificado ACM wildcard validado por DNS.
+# Independe do cluster, mas o ExternalDNS (pod_identity) consome o zone_arn.
+module "dns" {
+  source = "./modules/dns"
+
+  domain_name = var.domain_name
+}
+
+# (5) Bootstrap do GitOps (Camada 1): instala, via Helm, o AWS Load Balancer
+# Controller e o ArgoCD no cluster. Depois disto, o App of Apps do ArgoCD
+# (aplicado à parte, versionado em gitops/) assume o restante (Camada 2).
+#
+# depends_on em pod_identity: o LB Controller precisa da associação de Pod
+# Identity (SA aws-load-balancer-controller) já existente para autenticar na AWS.
+# Se o chart subir antes da associação, os pods ficam sem credencial (mesmo
+# problema de timing visto no EBS CSI).
+module "platform" {
+  source = "./modules/platform"
+
+  cluster_name = module.eks.cluster_name
+  region       = var.region
+  vpc_id       = module.vpc.vpc_id
+
+  # Fase 7: expõe o ArgoCD em argocd.<domínio> com HTTPS (cert ACM wildcard).
+  argocd_hostname     = "argocd.${var.domain_name}"
+  acm_certificate_arn = module.dns.certificate_arn
+
+  depends_on = [module.pod_identity]
 }

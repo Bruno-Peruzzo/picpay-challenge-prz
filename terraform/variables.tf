@@ -51,3 +51,9 @@ variable "ecr_repository_name" {
   type        = string
   default     = "picpay-challenge-app"
 }
+
+variable "domain_name" {
+  description = "Domínio raiz (registrado no Namecheap; hosted zone criada à mão no Route53). Usado pelo módulo dns (ACM wildcard) e pelo ExternalDNS."
+  type        = string
+  default     = "prz-picpay.lat"
+}
