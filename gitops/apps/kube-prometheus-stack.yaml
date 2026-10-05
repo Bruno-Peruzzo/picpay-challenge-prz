@@ -112,6 +112,18 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+  # ignoreDifferences: o K8s 1.33+ adicionou .status.terminatingReplicas ao
+  # Deployment, campo que o schema do ArgoCD 7.8.2 nao conhece. Com
+  # ServerSideApply/ServerSideDiff isso quebrava o calculo de diff
+  # ("field not declared in schema"), deixando o sync em Unknown e impedindo a
+  # aplicacao das mudancas (ex.: o fix de memoria do Grafana). Ignorar esse
+  # campo de status restaura o diff. E status (nao desejado), entao ignorar e
+  # seguro. Removivel quando o ArgoCD for atualizado para um schema do K8s 1.33+.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /status/terminatingReplicas
   syncPolicy:
     automated:
       prune: true
