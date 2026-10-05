@@ -87,12 +87,15 @@ spec:
               alb.ingress.kubernetes.io/ssl-redirect: "443"
               # ARN do cert ACM wildcard (output acm_certificate_arn do Terraform).
               alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-2:390736326016:certificate/8c474a6e-698c-4b14-abf9-d3d285c3d93f"
+          # Grafana 11+/12 consome bem mais que 256Mi; com o limite antigo o
+          # container era OOMKilled (exit 137) em loop. 512Mi dá folga para a UI
+          # + plugins + sidecars de dashboards.
           resources:
             requests:
               cpu: 50m
-              memory: 128Mi
-            limits:
               memory: 256Mi
+            limits:
+              memory: 512Mi
           persistence:
             enabled: true
             size: 2Gi
