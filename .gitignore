@@ -1,0 +1,57 @@
+# ---- Credenciais e segredos (NUNCA commitar) ----
+*.env
+.env
+.env.*
+*.pem
+*.key
+credentials
+access-aws.txt
+.aws/
+
+# ---- Terraform ----
+.terraform/
+.terraform.lock.hcl.bak
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!example.tfvars
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# ---- Go ----
+/app/bin/
+*.exe
+*.test
+*.out
+vendor/
+
+# ---- Kubernetes / Helm ----
+*.tgz
+charts/
+kubeconfig
+*.kubeconfig
+
+# ---- IDE / OS ----
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~
+
+# ---- Build / tmp ----
+dist/
+tmp/
+*.log
+
+# ---- Artefatos de agente de IA (não versionar) ----
+# Scaffolding de ferramentas de IA (planos/revisões). NÃO é código de infra.
+# Os módulos Terraform ficam em terraform/modules/ e SÃO versionados.
+.agents/
+**/.agents/
