@@ -74,6 +74,13 @@ module "eks" {
     spot = {
       capacity_type = "SPOT"
 
+      # ami_type EXPLICITO: sem isto o módulo não resolve user_data_type como
+      # "al2023" e IGNORA o cloudinit_pre_nodeadm (o submódulo _user_data só gera
+      # o doc nodeadm quando user_data_type == "al2023"). Era por isso que o
+      # maxPods=110 abaixo não entrava no launch template. AL2023 é o default do
+      # EKS para os nós, mas o módulo precisa saber disso explicitamente.
+      ami_type = "AL2023_x86_64_STANDARD"
+
       # Lista diversificada de tipos baratos equivalentes (decisão D3):
       # diversificar reduz o risco de interrupção SPOT simultânea.
       instance_types = var.node_instance_types
