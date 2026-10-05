@@ -7,5 +7,15 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    # helm/kubernetes instalam a Camada 1 de GitOps (LB Controller + ArgoCD)
+    # no cluster recém-criado, no mesmo apply da infra.
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.17"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.33"
+    }
   }
 }
