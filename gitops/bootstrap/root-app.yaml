@@ -1,0 +1,37 @@
+# root-app — a Application RAIZ do padrão "App of Apps".
+#
+# Esta é a ÚNICA Application aplicada no bootstrap (pelo Terraform, após instalar
+# o ArgoCD). Ela aponta para o diretório gitops/apps/, onde cada arquivo é uma
+# Application filha (controllers, observabilidade, a app). O ArgoCD descobre e
+# gerencia todas elas a partir daqui.
+#
+# É isto que responde ao requisito de "reconstruir após destroy": recriou o
+# cluster + aplicou esta root-app => o ArgoCD reinstala tudo lendo do Git, na
+# ordem das sync-waves (0: LB Controller; 1: ExternalDNS + kube-prometheus-stack;
+# 2: picpay-app).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-app
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Bruno-Peruzzo/picpay-challenge-prz.git
+    targetRevision: master
+    path: gitops/apps
+    directory:
+      # recurse=false: lê só os arquivos diretamente em gitops/apps (as
+      # Applications filhas). Cada filha é que aponta para o chart dela.
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

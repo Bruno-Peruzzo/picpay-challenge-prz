@@ -114,16 +114,20 @@ service:
 ingress:
   enabled: false
   className: alb
-  host: ""        # ex.: app.seu-dominio.com (Fase 7)
+  host: ""        # ex.: app.prz-picpay.lat (definido na Application do GitOps)
+  # certificateArn: quando preenchido, o template adiciona as annotations de
+  # HTTPS (listen-ports 80+443, ssl-redirect 443, certificate-arn) e o ALB passa
+  # a servir TLS. Vazio => só HTTP. Definido na Application do GitOps na Fase 7.
+  certificateArn: ""
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/healthcheck-path: /health
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
-    # Fase 7 (HTTPS):
-    # alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
-    # alb.ingress.kubernetes.io/ssl-redirect: '443'
-    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-2:390736326016:certificate/xxxx
+    # group.name: compartilha o MESMO ALB do ArgoCD/Grafana (um só load balancer
+    # para todas as apps públicas — menos custo).
+    alb.ingress.kubernetes.io/group.name: picpay-public
+    # listen-ports/ssl-redirect/certificate-arn são injetados pelo template
+    # quando ingress.certificateArn está preenchido (ver templates/ingress.yaml).
 
 # -----------------------------------------------------------------------------
 # ServiceMonitor (kube-prometheus-stack)

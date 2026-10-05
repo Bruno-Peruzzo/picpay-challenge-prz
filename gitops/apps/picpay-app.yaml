@@ -1,0 +1,56 @@
+# Application da NOSSA aplicação (picpay-app).
+# Única Application que aponta para o nosso próprio repo (os controllers e a
+# observabilidade apontam para charts oficiais de terceiros).
+#
+# sync-wave "1": sobe DEPOIS do kube-prometheus-stack (wave 0, instala o CRD
+# ServiceMonitor). O AWS Load Balancer Controller já existe desde o apply do
+# Terraform (Camada 1), então o Ingress é atendido assim que esta app sobe. Por
+# isso ligamos ingress.enabled e serviceMonitor.enabled aqui.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: picpay-app
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    # Garante que, ao deletar a Application, o ArgoCD remova os recursos no
+    # cluster (cascading delete) em vez de deixar órfãos.
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    # Repo de INFRA (este mesmo repo), onde vive o chart da app.
+    repoURL: https://github.com/Bruno-Peruzzo/picpay-challenge-prz.git
+    targetRevision: master
+    path: helm/picpay-app
+    helm:
+      values: |
+        # A tag é bumpada pelo CI (repo da app) a cada push — este é o ponto de
+        # encontro das duas esteiras (CI da app -> values aqui -> ArgoCD -> cluster).
+        image:
+          tag: "latest"   # CI substitui pelo SHA do commit
+        ingress:
+          enabled: true
+          className: alb
+          # Fase 7: subdomínio público da app. ExternalDNS cria o registro
+          # app.prz-picpay.lat -> ALB automaticamente a partir deste host.
+          host: "app.prz-picpay.lat"
+          # ARN do cert ACM wildcard (output `acm_certificate_arn` do Terraform).
+          # Com ele, o template liga HTTPS (443 + redirect 80->443). Vazio => só HTTP.
+          certificateArn: "arn:aws:acm:us-east-2:390736326016:certificate/8c474a6e-698c-4b14-abf9-d3d285c3d93f"
+        serviceMonitor:
+          enabled: true
+          # Casa com o selector do Prometheus do kube-prometheus-stack: o stack
+          # seleciona ServiceMonitors com a label release=<nome do release do stack>.
+          additionalLabels:
+            release: kube-prometheus-stack
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: picpay-app
+  syncPolicy:
+    automated:
+      prune: true       # remove do cluster o que sai do Git
+      selfHeal: true    # reverte drift manual, reconvergindo para o Git
+    syncOptions:
+      - CreateNamespace=true

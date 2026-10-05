@@ -1,0 +1,118 @@
+# Application do kube-prometheus-stack (Prometheus + Grafana + Alertmanager +
+# Prometheus Operator + exporters + dashboards de cluster).
+#
+# sync-wave "0": precisa instalar o CRD ServiceMonitor ANTES de a app (wave 1)
+# criar o seu ServiceMonitor. O Prometheus Operator (parte do stack) registra
+# esses CRDs.
+#
+# IMPORTANTE sobre o nome do release: no App of Apps o ArgoCD usa o NOME desta
+# Application (kube-prometheus-stack) como release Helm. O Prometheus do stack
+# seleciona ServiceMonitors com a label release=<release>. Por isso o
+# picpay-app.yaml define serviceMonitor.additionalLabels.release=kube-prometheus-stack.
+# Se renomear esta Application, ajuste lá também.
+#
+# Storage: usa PVC (EBS via aws-ebs-csi-driver, criado no módulo pod-identity).
+# Sem storage, Prometheus perde dados ao reiniciar.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    # Versão FIXADA (reprodutibilidade). Estável mais recente confirmada em
+    # 2026-10-05 via `helm search repo prometheus-community/kube-prometheus-stack`.
+    # Chart 91.9.0 => Prometheus Operator app v0.94.1.
+    targetRevision: "91.9.0"
+    helm:
+      # O stack instala CRDs grandes (ServiceMonitor etc.); ServerSideApply evita
+      # o erro "metadata.annotations too long" do apply client-side.
+      values: |
+        # --- Prometheus ---
+        prometheus:
+          prometheusSpec:
+            retention: 7d
+            # Descobre ServiceMonitors de TODOS os namespaces (não só os com a
+            # label do release). Simplifica, mas mantemos o label por clareza.
+            serviceMonitorSelectorNilUsesHelmValues: false
+            resources:
+              requests:
+                cpu: 100m
+                memory: 400Mi
+              limits:
+                memory: 800Mi
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 10Gi
+        # --- Grafana ---
+        grafana:
+          # Senha do admin: para o desafio, default do chart (admin/prom-operator)
+          # ou defina via secret. Em produção, usar secret externo.
+          # ATENÇÃO: Grafana fica EXPOSTO PUBLICAMENTE (grafana.prz-picpay.lat).
+          # Trocar esta senha após o primeiro acesso.
+          defaultDashboardsEnabled: true
+          # root_url/domain: o Grafana fica atrás do ALB em grafana.prz-picpay.lat.
+          # Sem isso, redirects de login e links de share quebram (apontam para
+          # localhost:3000). serve_from_sub_path=false porque servimos na raiz do
+          # host dedicado.
+          grafana.ini:
+            server:
+              domain: grafana.prz-picpay.lat
+              root_url: "https://grafana.prz-picpay.lat"
+          # Ingress ALB dedicado ao Grafana, no MESMO ALB compartilhado
+          # (group.name picpay-public) do ArgoCD e da app. ExternalDNS cria o
+          # registro grafana.prz-picpay.lat -> ALB a partir deste host.
+          ingress:
+            enabled: true
+            ingressClassName: alb
+            hosts:
+              - grafana.prz-picpay.lat
+            annotations:
+              alb.ingress.kubernetes.io/scheme: internet-facing
+              alb.ingress.kubernetes.io/target-type: ip
+              alb.ingress.kubernetes.io/group.name: picpay-public
+              alb.ingress.kubernetes.io/healthcheck-path: /api/health
+              alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+              alb.ingress.kubernetes.io/ssl-redirect: "443"
+              # ARN do cert ACM wildcard (output acm_certificate_arn do Terraform).
+              alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-2:390736326016:certificate/8c474a6e-698c-4b14-abf9-d3d285c3d93f"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          persistence:
+            enabled: true
+            size: 2Gi
+        # --- Alertmanager ---
+        # Mantido simples; sem storage persistente para economizar (não é foco).
+        alertmanager:
+          alertmanagerSpec:
+            resources:
+              requests:
+                cpu: 25m
+                memory: 64Mi
+              limits:
+                memory: 128Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

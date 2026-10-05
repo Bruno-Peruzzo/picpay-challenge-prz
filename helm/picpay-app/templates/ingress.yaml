@@ -5,10 +5,18 @@ metadata:
   name: {{ include "picpay-app.fullname" . }}
   labels:
     {{- include "picpay-app.labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
   annotations:
+    {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- end }}
+    {{- if .Values.ingress.certificateArn }}
+    # HTTPS ligado: ALB escuta 80 e 443, redireciona 80->443 e usa o cert ACM.
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.ingress.certificateArn | quote }}
+    {{- else }}
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   rules:

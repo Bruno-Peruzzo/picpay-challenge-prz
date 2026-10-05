@@ -1,0 +1,57 @@
+# Application do ExternalDNS.
+# Cria/atualiza registros DNS no Route53 automaticamente a partir de Ingress e
+# Service. sync-wave "0": sobe cedo, junto com a observabilidade. O AWS Load
+# Balancer Controller NÃO é mais uma Application aqui — ele é instalado via
+# Terraform no apply inicial (Camada 1), por praticidade.
+#
+# CONTRATO Pod Identity (DECISOES.md D18): a service account DEVE ser
+# external-dns/external-dns — par associado à IAM role no módulo pod-identity.
+# Sem domínio ainda (Fase 7), o ExternalDNS sobe mas não tem hosted zone para
+# gerenciar; passa a agir quando a zona existir. Enquanto isso é inofensivo.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-dns
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes-sigs.github.io/external-dns/
+    chart: external-dns
+    # Versão FIXADA (reprodutibilidade). Estável mais recente confirmada em
+    # 2026-10-05 via `helm search repo external-dns/external-dns`.
+    # Chart 1.23.0 => ExternalDNS app v0.23.0.
+    targetRevision: "1.23.0"
+    helm:
+      values: |
+        provider:
+          name: aws
+        # Restringe a sincronização ao Route53 e evita mexer em registros não
+        # gerenciados por ele (segurança: só altera o que criou).
+        policy: sync
+        txtOwnerId: picpay-challenge-dev
+        # Fase 7: restringe o ExternalDNS a gerenciar APENAS registros do nosso
+        # domínio. Ele cria argocd/grafana/app automaticamente a partir do host
+        # de cada Ingress.
+        domainFilters: ["prz-picpay.lat"]
+        serviceAccount:
+          create: true
+          name: external-dns
+          # SEM annotations (Pod Identity).
+        # Observa Ingress (os ALBs) e Services.
+        sources:
+          - ingress
+          - service
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: external-dns
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
