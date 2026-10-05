@@ -23,14 +23,36 @@ output "ecr_repository_url" {
   value       = module.ecr.repository_url
 }
 
+output "node_group_iam_role_arn" {
+  description = "ARN da role IAM do node group SPOT (informativo)."
+  value       = module.eks.node_group_iam_role_arn
+}
+
 output "lb_controller_role_arn" {
-  description = "ARN da role IRSA do AWS Load Balancer Controller."
-  value       = module.iam_irsa.lb_controller_role_arn
+  description = "ARN da IAM role do AWS Load Balancer Controller (via Pod Identity)."
+  value       = module.pod_identity.lb_controller_role_arn
 }
 
 output "external_dns_role_arn" {
-  description = "ARN da role IRSA do ExternalDNS."
-  value       = module.iam_irsa.external_dns_role_arn
+  description = "ARN da IAM role do ExternalDNS (via Pod Identity)."
+  value       = module.pod_identity.external_dns_role_arn
+}
+
+output "ebs_csi_role_arn" {
+  description = "ARN da IAM role do EBS CSI Driver (via Pod Identity)."
+  value       = module.pod_identity.ebs_csi_role_arn
+}
+
+# Pares namespace/serviceAccount que o Helm DEVE usar (Fase 3) para que as
+# associações de Pod Identity entreguem credenciais às pods dos controllers.
+output "lb_controller_service_account" {
+  description = "namespace/serviceAccount esperado pelo Helm do AWS Load Balancer Controller."
+  value       = module.pod_identity.lb_controller_service_account
+}
+
+output "external_dns_service_account" {
+  description = "namespace/serviceAccount esperado pelo Helm do ExternalDNS."
+  value       = module.pod_identity.external_dns_service_account
 }
 
 output "update_kubeconfig_command" {

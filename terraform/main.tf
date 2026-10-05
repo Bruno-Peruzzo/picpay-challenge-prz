@@ -35,11 +35,19 @@ module "ecr" {
   repository_name = var.ecr_repository_name
 }
 
-# (4) Roles IRSA p/ controllers (dependem do OIDC provider do EKS).
-module "iam_irsa" {
-  source = "./modules/iam-irsa"
+# (4) Permissões dos controllers via EKS Pod Identity + addon EBS CSI.
+# A SCP da org bloqueia o OIDC provider (inviabiliza IRSA), então usamos Pod
+# Identity: cada controller recebe uma IAM role associada à sua service account,
+# sem OIDC provider e com permissão granular por workload. O agent que entrega
+# as credenciais é o addon eks-pod-identity-agent (habilitado no módulo eks).
+#
+# depends_on no módulo eks garante que o cluster, o node group e o
+# eks-pod-identity-agent estejam prontos antes de criarmos as associações e o
+# addon EBS CSI — este último precisa de nós para os pods subirem e ficar ACTIVE.
+module "pod_identity" {
+  source = "./modules/pod-identity"
 
-  cluster_name            = local.cluster_name
-  oidc_provider_arn       = module.eks.oidc_provider_arn
-  cluster_oidc_issuer_url = module.eks.cluster_oidc_issuer_url
+  cluster_name = module.eks.cluster_name
+
+  depends_on = [module.eks]
 }
