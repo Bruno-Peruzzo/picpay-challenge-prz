@@ -54,6 +54,17 @@ module "eks" {
     kube-proxy = {}
     vpc-cni = {
       before_compute = true
+      # Prefix delegation: eleva o teto de pods por nó. Tipos pequenos como
+      # t3.small ficam limitados a 11 pods (limite de IPs secundários do ENI);
+      # com prefix delegation o CNI aloca /28 por ENI e o teto sobe para ~110,
+      # sem custo adicional. Essencial para rodar kube-prometheus-stack + app em
+      # nós Free Tier. Documentado como boa prática da AWS para nós pequenos.
+      configuration_values = jsonencode({
+        env = {
+          ENABLE_PREFIX_DELEGATION = "true"
+          WARM_PREFIX_TARGET       = "1"
+        }
+      })
     }
     eks-pod-identity-agent = {}
   }
@@ -75,6 +86,29 @@ module "eks" {
         role     = "general"
         capacity = "spot"
       }
+
+      # Casa com o prefix delegation do vpc-cni (acima): sem elevar o max-pods do
+      # kubelet, o nó continuaria anunciando o teto antigo (11 no t3.small) mesmo
+      # com os IPs disponíveis. 110 é o valor recomendado pela AWS para prefix
+      # delegation.
+      #
+      # AMI AL2023 usa nodeadm (NÃO o bootstrap.sh do AL2), então o max-pods vai
+      # via config MIME do nodeadm em cloudinit_pre_nodeadm — a sintaxe
+      # `--kubelet-extra-args` do AL2 seria ignorada aqui.
+      cloudinit_pre_nodeadm = [
+        {
+          content_type = "application/node.eks.aws"
+          content      = <<-EOT
+            ---
+            apiVersion: node.eks.aws/v1alpha1
+            kind: NodeConfig
+            spec:
+              kubelet:
+                config:
+                  maxPods: 110
+          EOT
+        }
+      ]
 
       # NÃO repetir Project/Environment/ManagedBy — já vêm de default_tags.
       tags = {
