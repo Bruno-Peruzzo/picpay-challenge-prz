@@ -10,7 +10,8 @@ access-aws.txt
 
 # ---- Terraform ----
 .terraform/
-.terraform.lock.hcl.bak
+.terraform.lock.hcl
+.terraform.lock.*
 *.tfstate
 *.tfstate.*
 *.tfvars

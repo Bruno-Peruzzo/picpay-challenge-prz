@@ -1,0 +1,25 @@
+# StorageClass gp3 default — usa o EBS CSI Driver (ebs.csi.aws.com), instalado
+# via Pod Identity no Terraform. O cluster nasce só com a gp2 legada (provisioner
+# in-tree kubernetes.io/aws-ebs) e SEM default, então PVCs sem storageClassName
+# (ex.: Grafana do kube-prometheus-stack) ficavam Pending ("no storage class is
+# set"). Esta classe resolve isso e passa a ser a default do cluster.
+#
+# - provisioner ebs.csi.aws.com: driver moderno (o in-tree está deprecado).
+# - WaitForFirstConsumer: o volume EBS é criado na MESMA AZ do pod que o
+#   consome. Essencial num cluster multi-AZ com node group SPOT — evita o volume
+#   nascer numa zona onde o pod não pode rodar.
+# - encrypted true: EBS criptografado em repouso (boa prática de segurança).
+# - allowVolumeExpansion: permite crescer o volume sem recriar.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+parameters:
+  type: gp3
+  encrypted: "true"
