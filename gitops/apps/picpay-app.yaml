@@ -38,7 +38,7 @@ spec:
           host: "app.prz-picpay.lat"
           # ARN do cert ACM wildcard (output `acm_certificate_arn` do Terraform).
           # Com ele, o template liga HTTPS (443 + redirect 80->443). Vazio => só HTTP.
-          certificateArn: "arn:aws:acm:us-east-2:390736326016:certificate/8c474a6e-698c-4b14-abf9-d3d285c3d93f"
+          certificateArn: "arn:aws:acm:us-east-2:390736326016:certificate/2895f4b2-1588-478a-aef6-761f5de69430"
         serviceMonitor:
           enabled: true
           # Casa com o selector do Prometheus do kube-prometheus-stack: o stack

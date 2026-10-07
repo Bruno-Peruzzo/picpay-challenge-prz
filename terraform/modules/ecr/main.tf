@@ -7,6 +7,11 @@ resource "aws_ecr_repository" "this" {
   # garantindo rastreabilidade e combinando com deploy GitOps por tag fixa.
   image_tag_mutability = "IMMUTABLE"
 
+  # Permite que o `terraform destroy` apague o repositório mesmo com imagens
+  # dentro. Essencial para o ciclo destroy/apply repetível e barato do desafio
+  # (sem isso, o destroy falha com RepositoryNotEmptyException).
+  force_delete = true
+
   # Scan de vulnerabilidades automático a cada push (segurança).
   image_scanning_configuration {
     scan_on_push = true

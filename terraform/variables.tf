@@ -31,19 +31,19 @@ variable "node_instance_types" {
 variable "node_min_size" {
   description = "Número mínimo de nós no node group SPOT."
   type        = number
-  default     = 2
+  default     = 3
 }
 
 variable "node_max_size" {
   description = "Número máximo de nós no node group SPOT."
   type        = number
-  default     = 4
+  default     = 6
 }
 
 variable "node_desired_size" {
   description = "Número desejado de nós no node group SPOT."
   type        = number
-  default     = 2
+  default     = 3
 }
 
 variable "ecr_repository_name" {
