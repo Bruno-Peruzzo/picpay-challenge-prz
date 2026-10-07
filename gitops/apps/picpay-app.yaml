@@ -29,7 +29,7 @@ spec:
         # A tag é bumpada pelo CI (repo da app) a cada push — este é o ponto de
         # encontro das duas esteiras (CI da app -> values aqui -> ArgoCD -> cluster).
         image:
-          tag: "sha-1a4edf115b3f"   # CI substitui pelo SHA do commit
+          tag: "sha-26250413dae9"   # CI substitui pelo SHA do commit
         ingress:
           enabled: true
           className: alb
